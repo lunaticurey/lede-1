@@ -7,6 +7,7 @@ DEVICE_VARS += LOADER_FLASH_OFFS LOADER_TYPE
 DEVICE_VARS += LOADER_FLASH_MAX LOADER_KERNEL_MAGIC
 DEVICE_VARS += NETGEAR_BOARD_ID NETGEAR_HW_ID
 DEVICE_VARS += RAS_BOARD RAS_ROOTFS_SIZE RAS_VERSION
+DEVICE_VARS += SEAMA_SIGNATURE SEAMA_MTDBLOCK
 
 define Build/combined-image
 	sh $(TOPDIR)/scripts/combined-image.sh \
@@ -27,14 +28,17 @@ define Build/loader-common
 endef
 
 define Build/loader-kernel
-	$(call Build/loader-common,LOADER_DATA="$@")
+	$(call Build/loader-common, \
+		LOADER_DATA="$@" \
+		BOARD="$(DEVICE_NAME)" )
 endef
 
 define Build/loader-okli-compile
 	$(call Build/loader-common, \
 		FLASH_OFFS=$(LOADER_FLASH_OFFS) \
 		FLASH_MAX=$(LOADER_FLASH_MAX) \
-		KERNEL_MAGIC=$(LOADER_KERNEL_MAGIC) )
+		KERNEL_MAGIC=$(LOADER_KERNEL_MAGIC) \
+		BOARD="$(DEVICE_NAME)" )
 endef
 
 # Arguments: <output name> <kernel offset>
@@ -65,16 +69,6 @@ define Build/relocate-kernel
 	rm -rf $@.relocate
 endef
 
-define Build/append-okli-kernel
-	dd if="$(KDIR)/loader-$(word 1,$(1)).uImage" >> "$@"
-endef
-
-define Build/prepad-okli-kernel
-  -[ -f "$@" ] && \
-  dd if="$(KDIR)/loader-$(word 1,$(1)).uImage" of="$@".tmp bs=64k conv=sync && \
-  cat "$@" >>"$@".tmp && \
-  mv "$@".tmp "$@"
-endef
 
 define Device/Default
   DEVICE_DTS_DIR := ../dts
@@ -92,6 +86,31 @@ define Device/Default
   IMAGES := sysupgrade.bin
   IMAGE/sysupgrade.bin = append-kernel | pad-to $$$$(BLOCKSIZE) | \
 	append-rootfs | pad-rootfs | check-size | append-metadata
+endef
+
+define Device/loader-okli-uimage
+  LOADER_TYPE := bin
+  COMPILE := loader-$(1).bin loader-$(1).uImage
+  COMPILE/loader-$(1).bin := loader-okli-compile
+  COMPILE/loader-$(1).uImage := append-loader-okli $(1) | pad-to 64k | \
+	lzma | uImage lzma
+endef
+
+define Device/seama
+  KERNEL := kernel-bin | append-dtb | relocate-kernel | lzma
+  KERNEL_INITRAMFS := $$(KERNEL) | seama
+  IMAGES += factory.bin
+  SEAMA_MTDBLOCK := 1
+
+  # 64 bytes offset:
+  # - 28 bytes seama_header
+  # - 36 bytes of META data (4-bytes aligned)
+  IMAGE/default := append-kernel | pad-offset $$$$(BLOCKSIZE) 64 | append-rootfs
+  IMAGE/sysupgrade.bin := $$(IMAGE/default) | seama | pad-rootfs | \
+	check-size | append-metadata
+  IMAGE/factory.bin := $$(IMAGE/default) | pad-rootfs -x 64 | seama | \
+	seama-seal | check-size
+  SEAMA_SIGNATURE :=
 endef
 
 include $(SUBTARGET).mk

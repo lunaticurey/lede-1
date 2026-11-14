@@ -2,6 +2,11 @@
 
 #include "mt7621_xiaomi_nand_128m.dtsi"
 
+/* override EEPROM size to 0x4da8 for MT7615 */
+&eeprom_factory_8000 {
+	reg = <0x8000 0x4da8>;
+};
+
 &pcie {
 	status = "okay";
 };
@@ -10,7 +15,8 @@
 	wifi@0,0 {
 		compatible = "mediatek,mt76";
 		reg = <0x0000 0 0 0 0>;
-		mediatek,mtd-eeprom = <&factory 0x8000>;
+		nvmem-cells = <&eeprom_factory_8000>;
+		nvmem-cell-names = "eeprom";
 		ieee80211-freq-limit = <5000000 6000000>;
 	};
 };
@@ -19,24 +25,50 @@
 	wifi@0,0 {
 		compatible = "mediatek,mt76";
 		reg = <0x0000 0 0 0 0>;
-		mediatek,mtd-eeprom = <&factory 0x0000>;
+		nvmem-cells = <&eeprom_factory_0>;
+		nvmem-cell-names = "eeprom";
 		ieee80211-freq-limit = <2400000 2500000>;
 	};
 };
 
-&ethernet {
-	compatible = "mediatek,ralink-mt7621-eth";
-	mediatek,switch = <&gsw>;
-	mtd-mac-address = <&factory 0xe000>;
+&gmac0 {
+	nvmem-cells = <&macaddr_factory_e000>;
+	nvmem-cell-names = "mac-address";
 };
 
-&switch0 {
-	/delete-property/ compatible;
-	phy-mode = "rgmii";
+&gmac1 {
+	status = "okay";
+	label = "wan";
+	phy-handle = <&ethphy0>;
+
+	nvmem-cells = <&macaddr_factory_e006>;
+	nvmem-cell-names = "mac-address";
+};
+
+&ethphy0 {
+	/delete-property/ interrupts;
 };
 
 &gsw {
-	compatible = "mediatek,ralink-mt7621-gsw";
+
+		port@2 {
+		compatible = "mediatek,mt753x-port";
+			status = "okay";
+			label = "lan1";
+		};
+
+		port@3 {
+		compatible = "mediatek,mt753x-port";
+			status = "okay";
+			label = "lan2";
+		};
+
+		port@4 {
+		compatible = "mediatek,mt753x-port";
+			status = "okay";
+			label = "lan3";
+		};
+
 };
 
 &state_default {

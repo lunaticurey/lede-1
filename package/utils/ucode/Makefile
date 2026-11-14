@@ -12,24 +12,61 @@ PKG_RELEASE:=1
 
 PKG_SOURCE_PROTO:=git
 PKG_SOURCE_URL=https://github.com/jow-/ucode.git
-PKG_SOURCE_DATE:=2021-03-31
-PKG_SOURCE_VERSION:=973cc6c865dcf6075c493125313058b650b08234
-PKG_MIRROR_HASH:=fb4d3e231c79a9122743f0ced7fd4fdcf81903de5c721d3c18d5779e44d50bdf
+PKG_SOURCE_DATE:=2026-07-09
+PKG_SOURCE_VERSION:=b885dd0fe1e974551fb1233ca5f3aa74d80b74d9
+PKG_MIRROR_HASH:=db2503addf70899625120e743406dc5225433dc55062c3b644dcb9a8df763e32
 PKG_MAINTAINER:=Jo-Philipp Wich <jo@mein.io>
 PKG_LICENSE:=ISC
 
+PKG_ABI_VERSION:=20230711
+PKG_BUILD_DEPENDS:=libmd
+HOST_BUILD_DEPENDS:=libjson-c/host
+
 include $(INCLUDE_DIR)/package.mk
+include $(INCLUDE_DIR)/host-build.mk
 include $(INCLUDE_DIR)/cmake.mk
 
+CMAKE_OPTIONS += \
+	-DSOVERSION=$(PKG_ABI_VERSION)
+
+CMAKE_HOST_OPTIONS += \
+	-DCMAKE_SKIP_RPATH=FALSE \
+	-DCMAKE_INSTALL_RPATH="${STAGING_DIR_HOSTPKG}/lib"
+
+ifeq ($(HOST_OS),Darwin)
+  CMAKE_HOST_OPTIONS += \
+	-DCMAKE_MACOSX_RPATH=1
+else
+  CMAKE_HOST_OPTIONS += \
+	-DUSE_RPATH="${STAGING_DIR_HOSTPKG}/lib"
+endif
+
+CMAKE_HOST_OPTIONS += \
+	-DFS_SUPPORT=ON \
+	-DMATH_SUPPORT=ON \
+	-DNL80211_SUPPORT=OFF \
+	-DRESOLV_SUPPORT=OFF \
+	-DRTNL_SUPPORT=OFF \
+	-DSTRUCT_SUPPORT=ON \
+	-DUBUS_SUPPORT=OFF \
+	-DUCI_SUPPORT=OFF \
+	-DULOOP_SUPPORT=OFF \
+	-DDEBUG_SUPPORT=ON \
+	-DLOG_SUPPORT=OFF \
+	-DZLIB_SUPPORT=ON \
+	-DDIGEST_SUPPORT=OFF
+
+
 define Package/ucode/default
-  SECTION:=utils
-  CATEGORY:=Utilities
-  TITLE:=ucode - Tiny scripting and templating language
+  SUBMENU:=ucode
+  SECTION:=lang
+  CATEGORY:=Languages
+  TITLE:=Tiny scripting and templating language
 endef
 
 define Package/ucode
   $(Package/ucode/default)
-  DEPENDS:=+libjson-c
+  DEPENDS:=+libucode
 endef
 
 define Package/ucode/description
@@ -38,79 +75,128 @@ define Package/ucode/description
 endef
 
 
-define Package/ucode-mod-fs
+define Package/libucode
   $(Package/ucode/default)
-  TITLE+= (filesystem module)
-  DEPENDS:=ucode
+  SUBMENU:=
+  SECTION:=libs
+  CATEGORY:=Libraries
+  TITLE+= (library)
+  ABI_VERSION:=$(PKG_ABI_VERSION)
+  DEPENDS:=+libjson-c
 endef
 
-define Package/ucode-mod-fs/description
- The filesystem plugin module allows interaction with the local file system.
+define Package/libucode/description
+ The libucode package provides the shared runtime library for the ucode interpreter.
 endef
 
+# 1: name
+# 2: cmake symbol
+# 3: depends
+# 4: description
+define UcodeModule
+  UCODE_MODULES += ucode-mod-$(strip $(1))
+  CMAKE_OPTIONS += -D$(strip $(2))=$(if $(CONFIG_PACKAGE_ucode-mod-$(strip $(1))),ON,OFF)
+  PKG_CONFIG_DEPENDS += CONFIG_PACKAGE_ucode-mod-$(strip $(1))
 
-define Package/ucode-mod-math
+ define Package/ucode-mod-$(strip $(1))
   $(Package/ucode/default)
-  TITLE+= (math module)
-  DEPENDS:=ucode
-endef
+  TITLE+= ($(strip $(1)) module)
+  DEPENDS:=+ucode $(3)
+ endef
 
-define Package/ucode-mod-math/description
- The math plugin provides access to various <math.h> procedures.
-endef
+ define Package/ucode-mod-$(strip $(1))/description
+ $(strip $(4))
+ endef
 
-
-define Package/ucode-mod-ubus
-  $(Package/ucode/default)
-  TITLE+= (ubus module)
-  DEPENDS:=ucode +libubus +libblobmsg-json
-endef
-
-define Package/ucode-mod-ubus/description
- The ubus module allows ucode template scripts to enumerate and invoke ubus
- procedures.
+ define Package/ucode-mod-$(strip $(1))/install
+	$(INSTALL_DIR) $$(1)/usr/lib/ucode
+	$(INSTALL_BIN) $(PKG_INSTALL_DIR)/usr/lib/ucode/$(strip $(1)).so $$(1)/usr/lib/ucode/
+ endef
 endef
 
 
-define Package/ucode-mod-uci
-  $(Package/ucode/default)
-  TITLE+= (uci module)
-  DEPENDS:=ucode +libuci
-endef
-
-define Package/ucode-mod-uci/description
- The uci module allows templates to read and modify uci configuration.
+define Build/InstallDev
+	$(INSTALL_DIR) $(1)/usr/lib $(1)/usr/include/ucode
+	$(CP) $(PKG_INSTALL_DIR)/usr/include/ucode/*.h $(1)/usr/include/ucode/
+	$(CP) $(PKG_INSTALL_DIR)/usr/lib/libucode.so* $(1)/usr/lib/
 endef
 
 
 define Package/ucode/install
 	$(INSTALL_DIR) $(1)/usr/bin
-	$(INSTALL_BIN) $(PKG_BUILD_DIR)/ucode $(1)/usr/bin/ucode
+	$(CP) $(PKG_INSTALL_DIR)/usr/bin/u* $(1)/usr/bin/
 endef
 
-define Package/ucode-mod-fs/install
-	$(INSTALL_DIR) $(1)/usr/lib/ucode
-	$(INSTALL_BIN) $(PKG_BUILD_DIR)/lib/fs.so $(1)/usr/lib/ucode/
-endef
-
-define Package/ucode-mod-math/install
-	$(INSTALL_DIR) $(1)/usr/lib/ucode
-	$(INSTALL_BIN) $(PKG_BUILD_DIR)/lib/math.so $(1)/usr/lib/ucode/
-endef
-
-define Package/ucode-mod-ubus/install
-	$(INSTALL_DIR) $(1)/usr/lib/ucode
-	$(INSTALL_BIN) $(PKG_BUILD_DIR)/lib/ubus.so $(1)/usr/lib/ucode/
-endef
-
-define Package/ucode-mod-uci/install
-	$(INSTALL_DIR) $(1)/usr/lib/ucode
-	$(INSTALL_BIN) $(PKG_BUILD_DIR)/lib/uci.so $(1)/usr/lib/ucode/
+define Package/libucode/install
+	$(INSTALL_DIR) $(1)/usr/lib
+	$(CP) $(PKG_INSTALL_DIR)/usr/lib/libucode.so.* $(1)/usr/lib/
 endef
 
 
+$(eval $(call UcodeModule, \
+	debug, DEBUG_SUPPORT, +libubox +libucode, \
+	The debug plugin module provides runtime debugging and introspection facilities.))
+
+$(eval $(call UcodeModule, \
+	fs, FS_SUPPORT, , \
+	The filesystem plugin module allows interaction with the local file system.))
+
+$(eval $(call UcodeModule, \
+	log, LOG_SUPPORT, +libubox, \
+	The log plugin module provides access to the syslog and libubox ulog APIs.))
+
+$(eval $(call UcodeModule, \
+	math, MATH_SUPPORT, , \
+	The math plugin provides access to various <math.h> procedures.))
+
+$(eval $(call UcodeModule, \
+	nl80211, NL80211_SUPPORT, +libnl-tiny +libubox, \
+	The nl80211 plugin provides access to the Linux wireless 802.11 netlink API.))
+
+$(eval $(call UcodeModule, \
+	resolv, RESOLV_SUPPORT, , \
+	The resolv plugin implements simple DNS resolving.))
+
+$(eval $(call UcodeModule, \
+	rtnl, RTNL_SUPPORT, +libnl-tiny +libubox, \
+	The rtnl plugin provides access to the Linux routing netlink API.))
+
+$(eval $(call UcodeModule, \
+	socket, SOCKET_SUPPORT, , \
+	The socket plugin provides access to IPv4, IPv6, Unix and packet socket APIs.))
+
+$(eval $(call UcodeModule, \
+	struct, STRUCT_SUPPORT, , \
+	The struct plugin implements Python 3 compatible struct.pack/unpack functionality.))
+
+$(eval $(call UcodeModule, \
+	ubus, UBUS_SUPPORT, +libubus +libblobmsg-json, \
+	The ubus module allows ucode template scripts to enumerate and invoke ubus procedures.))
+
+$(eval $(call UcodeModule, \
+	uci, UCI_SUPPORT, +libuci, \
+	The uci module allows templates to read and modify uci configuration.))
+
+$(eval $(call UcodeModule, \
+	uloop, ULOOP_SUPPORT, +libubox, \
+	The uloop module allows ucode scripts to interact with OpenWrt uloop event loop implementation.))
+
+$(eval $(call UcodeModule, \
+	digest, DIGEST_SUPPORT, , \
+	The digest module allows ucode scripts to use libmd digests.))
+
+$(eval $(call UcodeModule, \
+	io, IO_SUPPORT, , \
+	The io module allows direct file descriptor read/write (including non-blocking).))
+
+$(eval $(call UcodeModule, \
+	zlib, ZLIB_SUPPORT, +zlib, \
+	The zlib module allows ucode scripts to de/compress gzip and zlib formats.))
+
+$(eval $(call BuildPackage,libucode))
 $(eval $(call BuildPackage,ucode))
-$(eval $(call BuildPackage,ucode-mod-fs))
-$(eval $(call BuildPackage,ucode-mod-math))
-$(eval $(call BuildPackage,ucode-mod-ubus))
-$(eval $(call BuildPackage,ucode-mod-uci))
+
+$(foreach mod,$(UCODE_MODULES), \
+	$(eval $(call BuildPackage,$(mod))))
+
+$(eval $(call HostBuild))

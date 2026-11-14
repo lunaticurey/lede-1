@@ -27,6 +27,7 @@ struct hostapd_iface;
 struct hostapd_data;
 struct hapd_interfaces;
 struct rrm_measurement_beacon_report;
+struct sta_info;
 
 #ifdef UBUS_SUPPORT
 
@@ -47,6 +48,7 @@ void hostapd_ubus_add_vlan(struct hostapd_data *hapd, struct hostapd_vlan *vlan)
 void hostapd_ubus_remove_vlan(struct hostapd_data *hapd, struct hostapd_vlan *vlan);
 
 int hostapd_ubus_handle_event(struct hostapd_data *hapd, struct hostapd_ubus_request *req);
+void hostapd_ubus_handle_link_measurement(struct hostapd_data *hapd, const u8 *data, size_t len);
 void hostapd_ubus_notify(struct hostapd_data *hapd, const char *type, const u8 *mac);
 void hostapd_ubus_notify_beacon_report(struct hostapd_data *hapd,
 				       const u8 *addr, u8 token, u8 rep_mode,
@@ -61,6 +63,11 @@ void hostapd_ubus_notify_bss_transition_response(
 	const u8 *candidate_list, u16 candidate_list_len);
 void hostapd_ubus_add(struct hapd_interfaces *interfaces);
 void hostapd_ubus_free(struct hapd_interfaces *interfaces);
+int hostapd_ubus_notify_bss_transition_query(
+	struct hostapd_data *hapd, const u8 *addr, u8 dialog_token, u8 reason,
+	const u8 *candidate_list, u16 candidate_list_len);
+void hostapd_ubus_notify_authorized(struct hostapd_data *hapd, struct sta_info *sta,
+				    const char *auth_alg);
 
 #else
 
@@ -95,6 +102,10 @@ static inline int hostapd_ubus_handle_event(struct hostapd_data *hapd, struct ho
 	return 0;
 }
 
+static inline void hostapd_ubus_handle_link_measurement(struct hostapd_data *hapd, const u8 *data, size_t len)
+{
+}
+
 static inline void hostapd_ubus_notify(struct hostapd_data *hapd, const char *type, const u8 *mac)
 {
 }
@@ -125,6 +136,20 @@ static inline void hostapd_ubus_add(struct hapd_interfaces *interfaces)
 static inline void hostapd_ubus_free(struct hapd_interfaces *interfaces)
 {
 }
+
+static inline int hostapd_ubus_notify_bss_transition_query(
+	struct hostapd_data *hapd, const u8 *addr, u8 dialog_token, u8 reason,
+	const u8 *candidate_list, u16 candidate_list_len)
+{
+	return 0;
+}
+
+static inline void
+hostapd_ubus_notify_authorized(struct hostapd_data *hapd, struct sta_info *sta,
+			       const char *auth_alg)
+{
+}
+
 #endif
 
 #endif
